@@ -35,8 +35,7 @@ function Login() {
 
         {/* Logo / Header */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-bank-accent rounded-full mx-auto mb-4 flex items-center justify-center">
-            <span className="text-bank-dark font-black text-2xl">BS</span>
+          <div className="w-16 h-16 bg-bank-accent rounded-full mx-auto mb-4">
           </div>
           <h1 className="text-3xl font-bold text-bank-primary">Banco Sol</h1>
           <p className="text-gray-500 mt-1">Portal de Aprovação de Despesas</p>

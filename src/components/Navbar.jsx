@@ -7,8 +7,7 @@ function Navbar() {
     <nav className="bg-bank-primary text-white px-6 py-4 shadow-md border-b-4 border-bank-accent">
       <div className="max-w-5xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-bank-accent rounded-full flex items-center justify-center">
-            <span className="text-bank-dark font-black text-sm">BS</span>
+          <div className="w-8 h-8 bg-bank-accent rounded-full">
           </div>
           <span className="text-xl font-bold tracking-wide">Banco Sol</span>
         </div>
