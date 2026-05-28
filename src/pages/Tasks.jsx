@@ -91,7 +91,7 @@ function Tasks() {
                       onClick={() => handleClaim(task.id)}
                       className="bg-bank-accent text-bank-dark px-4 py-2 rounded-lg text-sm font-bold hover:bg-bank-accent-hover transition-colors"
                     >
-                      Reclamar
+                      Reivindicar
                     </button>
                   )}
                   {task.assignee === username && (
