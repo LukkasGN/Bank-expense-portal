@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
-import { getTaskById, getTaskVariables, completeTask, getTaskFormSchema, searchAccount, saveTaskVariables, cancelProcess, returnToPreviousTask, getUserGroups } from '../services/tasks'
+import { getTaskById, getTaskVariables, completeTask, getTaskFormSchema, searchAccount, saveTaskVariables, cancelProcess, suggestAccounts, getUserGroups } from '../services/tasks'
 
 function TaskDetail() {
   const { taskId } = useParams()
@@ -16,6 +16,8 @@ function TaskDetail() {
   const [nifOptions, setNifOptions] = useState([])
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [userGroups, setUserGroups] = useState([])
+  const [suggestions, setSuggestions] = useState([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
 
   useEffect(() => {
     if (!username) navigate('/login')
@@ -32,6 +34,22 @@ function TaskDetail() {
       ])
       setTask(taskData)
       setSchema(formSchema)
+
+      try {
+        const groups = await getUserGroups(username)
+        setUserGroups(groups.map(g => g.id))
+        console.log('groups loaded:', groups)
+      } catch (err) {
+        console.error('Failed to load groups:', err)
+      }
+
+      try {
+        const groups = await getUserGroups(username)
+        console.log('raw groups response:', groups)
+        setUserGroups(groups.map(g => g.id))
+      } catch (err) {
+        console.error('Failed to load groups:', err)
+      }
 
       const prefilled = {}
       Object.entries(vars).forEach(([key, val]) => {
@@ -63,10 +81,45 @@ function TaskDetail() {
       extractDefaults(formSchema?.components)
 
       setFormData(prefilled)
+      // Auto-search if conta_suporte already has a value
+      if (prefilled['conta_suporte']) {
+        try {
+          const result = await searchAccount(prefilled['conta_suporte'])
+          setNifOptions(result.nifs)
+        } catch (err) {
+          // silently fail, user can press Pesquisar manually
+        }
+      }
     } catch (err) {
       setError('Erro ao carregar tarefa')
     }
     setLoading(false)
+  }
+
+  async function handleAprovar() {
+    if (!window.confirm('Tem a certeza que deseja aprovar este processo?')) return
+    try {
+      await completeTask(taskId, {
+        aprovado: { value: true, type: 'Boolean' },
+        voltar: { value: false, type: 'Boolean' }
+      })
+      navigate('/tasks')
+    } catch (err) {
+      setError('Erro ao aprovar processo')
+    }
+  }
+
+  async function handleRejeitar() {
+    if (!window.confirm('Tem a certeza que deseja rejeitar este processo?')) return
+    try {
+      await completeTask(taskId, {
+        aprovado: { value: false, type: 'Boolean' },
+        voltar: { value: false, type: 'Boolean' }
+      })
+      navigate('/tasks')
+    } catch (err) {
+      setError('Erro ao rejeitar processo')
+    }
   }
 
   async function handlePesquisar() {
@@ -91,6 +144,28 @@ function TaskDetail() {
         setError('Erro ao pesquisar conta')
       }
     }
+  }
+
+  async function handleContaSuporteChange(value) {
+    handleChange('conta_suporte', value)
+    if (value.length >= 2) {
+      try {
+        const results = await suggestAccounts(value)
+        setSuggestions(results)
+        setShowSuggestions(true)
+      } catch {
+        setSuggestions([])
+      }
+    } else {
+      setSuggestions([])
+      setShowSuggestions(false)
+    }
+  }
+
+  function handleSuggestionClick(accountNumber) {
+    handleChange('conta_suporte', accountNumber)
+    setSuggestions([])
+    setShowSuggestions(false)
   }
 
   async function handleGravar() {
@@ -136,19 +211,17 @@ function TaskDetail() {
     }
   }
 
-  async function handleVoltar() {
-    if (!window.confirm('Tem a certeza que deseja devolver este processo?')) return
-    try {
-      await returnToPreviousTask(
-        task.processInstanceId,
-        task.taskDefinitionKey,  // current task ID (automatic)
-        'operacao-cambial'
-      )
-      navigate('/tasks')
-    } catch (err) {
-      setError('Erro ao devolver processo')
-    }
-  }
+ async function handleVoltar() {
+   if (!window.confirm('Tem a certeza que deseja devolver este processo?')) return
+   try {
+     await completeTask(taskId, {
+       voltar: { value: true, type: 'Boolean' }
+     })
+     navigate('/tasks')
+   } catch (err) {
+     setError('Erro ao devolver processo')
+   }
+ }
 
   async function handleComplete() {
     setSubmitting(true)
@@ -167,6 +240,7 @@ function TaskDetail() {
           camundaVars[key] = { value: String(value), type: 'String' }
         }
       })
+      camundaVars['voltar'] = { value: false, type: 'Boolean' }
       await completeTask(taskId, camundaVars)
       navigate('/tasks')
     } catch (err) {
@@ -176,7 +250,6 @@ function TaskDetail() {
   }
 
   function renderButton(btn) {
-    const isInline = btn.layout?.columns === 2
     const styleMap = {
       'Cancelar': 'bg-gray-200 text-gray-700 hover:bg-gray-300',
       'Voltar': 'bg-gray-200 text-gray-700 hover:bg-gray-300',
@@ -185,11 +258,12 @@ function TaskDetail() {
       'Pesquisar': 'bg-bank-accent text-bank-dark hover:bg-bank-accent-hover',
       'Inserir Banco': 'bg-bank-accent text-bank-dark hover:bg-bank-accent-hover',
       'Anexar Documento': 'bg-bank-accent text-bank-dark hover:bg-bank-accent-hover',
+      'Aprovar': 'bg-green-600 text-white hover:bg-green-700',
+      'Rejeitar': 'bg-red-600 text-white hover:bg-red-700',
     }
     const style = styleMap[btn.label] || 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-    const sizeClass = isInline
-      ? 'px-3 py-2 text-xs self-end'
-      : 'px-4 py-2 text-sm'
+    const isInline = btn.layout?.columns === 2
+    const sizeClass = isInline ? 'px-3 py-2 text-xs self-end' : 'px-6 py-2.5 text-sm'
 
     const handleButtonClick = () => {
       if (btn.label === 'Cancelar') {
@@ -202,11 +276,11 @@ function TaskDetail() {
         handleComplete()
       } else if (btn.label === 'Pesquisar') {
         handlePesquisar()
+      } else if (btn.label === 'Aprovar') {
+        handleAprovar()
+      } else if (btn.label === 'Rejeitar') {
+        handleRejeitar()
       }
-    }
-
-    if (btn.label === 'Cancelar' && !userGroups.includes('tecnicos')) {
-      return null
     }
 
     return (
@@ -229,6 +303,71 @@ function TaskDetail() {
     const readOnlyInput = "w-full border border-gray-200 rounded-lg px-4 py-2.5 bg-gray-50 text-gray-600 text-sm"
 
     if (type === 'button') return renderButton(component)
+
+    if (type === 'textfield' || type === 'number' || type === 'textarea') {
+      // Special autocomplete for conta_suporte
+      if (key === 'conta_suporte') {
+        return (
+          <div key={component.id} className="relative">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {label}
+              {validate?.required && <span className="text-red-500 ml-1">*</span>}
+            </label>
+            <input
+              type="text"
+              value={currentValue}
+              onChange={e => handleContaSuporteChange(e.target.value)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+              onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+              className={isReadOnly ? readOnlyInput : baseInput}
+              placeholder="Digite para pesquisar..."
+              autoComplete="off"
+            />
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute z-10 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto">
+                {suggestions.map(s => (
+                  <div
+                    key={s.account_number}
+                    onMouseDown={() => handleSuggestionClick(s.account_number)}
+                    className="px-4 py-2 hover:bg-bank-accent hover:text-bank-dark cursor-pointer text-sm border-b border-gray-100 last:border-0"
+                  >
+                    <span className="font-medium">{s.account_number}</span>
+                    <span className="text-gray-500 ml-2">— {s.nome}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      }
+
+      // Regular textfield
+      return (
+        <div key={component.id}>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            {label}
+            {validate?.required && <span className="text-red-500 ml-1">*</span>}
+          </label>
+          {type === 'textarea' ? (
+            <textarea
+              value={currentValue}
+              onChange={e => handleChange(key, e.target.value)}
+              disabled={isReadOnly}
+              rows={3}
+              className={isReadOnly ? readOnlyInput : baseInput}
+            />
+          ) : (
+            <input
+              type={type === 'number' ? 'number' : 'text'}
+              value={currentValue}
+              onChange={e => handleChange(key, e.target.value)}
+              disabled={isReadOnly}
+              className={isReadOnly ? readOnlyInput : baseInput}
+            />
+          )}
+        </div>
+      )
+    }
 
     if (type === 'datetime') {
       const displayLabel = component.dateLabel || label
@@ -417,17 +556,15 @@ function TaskDetail() {
   }
 
   function renderForm() {
-    if (!schema) {
-      return (
-        <div className="text-center py-10 text-gray-400">
-          <p className="text-lg">Sem formulário associado</p>
-        </div>
-      )
-    }
+    if (!schema) return null
 
     const components = schema.components || []
+    const isAnaliseTask = task?.name?.includes('Análise')
+
     const fields = components.filter(c => c.type !== 'button')
-    const buttons = components.filter(c => c.type === 'button' && c.label !== 'Criar Processo')
+    const buttons = components.filter(c =>
+      c.type === 'button' && c.label !== 'Criar Processo'
+    )
 
     return (
       <div className="space-y-6">
@@ -481,13 +618,15 @@ function TaskDetail() {
 
             {renderForm()}
 
-            <button
-              onClick={handleComplete}
-              disabled={submitting}
-              className="mt-8 w-full bg-bank-primary text-white py-3 rounded-lg font-semibold hover:bg-bank-secondary transition-colors disabled:opacity-50"
-            >
-              {submitting ? 'A processar...' : 'Criar Processo'}
-            </button>
+            {!task?.name?.includes('Análise') && (
+              <button
+                onClick={handleComplete}
+                disabled={submitting}
+                className="mt-8 w-full bg-bank-primary text-white py-3 rounded-lg font-semibold hover:bg-bank-secondary transition-colors disabled:opacity-50"
+              >
+                {submitting ? 'A processar...' : 'Criar Processo'}
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -120,6 +120,17 @@ export async function getTaskFormSchema(taskId) {
   }
 }
 
+export async function suggestAccounts(query) {
+  const response = await axios.get(
+    `http://localhost:8080/api/accounts/suggest`,
+    {
+      auth: getAuth(),
+      params: { query }
+    }
+  )
+  return response.data
+}
+
 async function handleVoltar() {
   try {
     // Cancel current task and restart previous activity
@@ -138,7 +149,11 @@ export async function getUserGroups(userId) {
       params: { userId }
     }
   )
-  return response.data
+  // Handle both array and object responses
+  const data = response.data
+  if (Array.isArray(data)) return data
+  if (data.groups) return data.groups
+  return []
 }
 
 async function loadTask() {
