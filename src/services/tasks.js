@@ -141,6 +141,14 @@ async function handleVoltar() {
   }
 }
 
+export async function getFieldOptions(tableName) {
+  const response = await axios.get(
+    `http://localhost:8080/api/accounts/options/${tableName}`,
+    { auth: getAuth() }
+  )
+  return response.data
+}
+
 export async function getUserGroups(userId) {
   const response = await axios.get(
     `${ENGINE_URL}/identity/groups`,

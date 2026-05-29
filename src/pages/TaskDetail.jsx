@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
-import { getTaskById, getTaskVariables, completeTask, getTaskFormSchema, searchAccount, saveTaskVariables, cancelProcess, suggestAccounts, getUserGroups } from '../services/tasks'
+import { getTaskById, getTaskVariables, completeTask, getTaskFormSchema, searchAccount, saveTaskVariables, cancelProcess, suggestAccounts, getFieldOptions, getUserGroups } from '../services/tasks'
 
 function TaskDetail() {
   const { taskId } = useParams()
@@ -18,6 +18,7 @@ function TaskDetail() {
   const [userGroups, setUserGroups] = useState([])
   const [suggestions, setSuggestions] = useState([])
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [fieldOptions, setFieldOptions] = useState({})
 
   useEffect(() => {
     if (!username) navigate('/login')
@@ -93,6 +94,24 @@ function TaskDetail() {
     } catch (err) {
       setError('Erro ao carregar tarefa')
     }
+    // Load select options from database
+    const optionTables = [
+      'finalidade', 'descricao_finalidade', 'detalhe_finalidade',
+      'objetivo_operacao', 'cobertura_cambial', 'despesas',
+      'moeda', 'pais_destino', 'instrumento_pagamento',
+      'residencia_cambial', 'cae', 'entidade_petrolifera',
+      'banco_beneficiario'
+    ]
+
+    const optionResults = await Promise.all(
+      optionTables.map(t => getFieldOptions(t).catch(() => []))
+    )
+
+    const options = {}
+    optionTables.forEach((table, i) => {
+      options[table] = optionResults[i]
+    })
+    setFieldOptions(options)
     setLoading(false)
   }
 
@@ -250,6 +269,13 @@ function TaskDetail() {
   }
 
   function renderButton(btn) {
+      function renderButton(btn) {
+        // Hide Voltar on the first task
+        if (btn.label === 'Voltar') {
+          const isFirstTask = task?.name?.toLowerCase().includes('operação cambial') ||
+                              task?.name?.toLowerCase().includes('operacao cambial')
+          if (isFirstTask) return null
+        }}
     const styleMap = {
       'Cancelar': 'bg-gray-200 text-gray-700 hover:bg-gray-300',
       'Voltar': 'bg-gray-200 text-gray-700 hover:bg-gray-300',
@@ -262,24 +288,28 @@ function TaskDetail() {
       'Rejeitar': 'bg-red-600 text-white hover:bg-red-700',
     }
     const style = styleMap[btn.label] || 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-    const isInline = btn.layout?.columns === 2
-    const sizeClass = isInline ? 'px-3 py-2 text-xs self-end' : 'px-6 py-2.5 text-sm'
+
+    // Inline buttons (Pesquisar, Inserir Banco) stay small
+    const inlineButtons = ['Pesquisar', 'Inserir Banco', 'Anexar Documento']
+    const isInline = inlineButtons.includes(btn.label)
+    const sizeClass = isInline
+      ? 'px-3 py-2 text-xs self-end'
+      : 'px-6 py-2.5 text-sm'
 
     const handleButtonClick = () => {
-      if (btn.label === 'Cancelar') {
-        handleCancelar()
-      } else if (btn.label === 'Voltar') {
-        handleVoltar()
-      } else if (btn.label === 'Gravar') {
-        handleGravar()
-      } else if (btn.label === 'Criar Processo') {
-        handleComplete()
-      } else if (btn.label === 'Pesquisar') {
-        handlePesquisar()
-      } else if (btn.label === 'Aprovar') {
-        handleAprovar()
-      } else if (btn.label === 'Rejeitar') {
-        handleRejeitar()
+      if (btn.label === 'Cancelar') handleCancelar()
+      else if (btn.label === 'Voltar') handleVoltar()
+      else if (btn.label === 'Gravar') handleGravar()
+      else if (btn.label === 'Criar Processo') handleComplete()
+      else if (btn.label === 'Pesquisar') handlePesquisar()
+      else if (btn.label === 'Aprovar') handleAprovar()
+      else if (btn.label === 'Rejeitar') handleRejeitar()
+    }
+
+    if (btn.label === 'Voltar') {
+      const firstTasks = ['Inicio operação Cambial', 'Inicio Operação Cambial']
+      if (firstTasks.some(name => task?.name?.includes(name) || task?.name === name)) {
+        return null
       }
     }
 
@@ -287,7 +317,7 @@ function TaskDetail() {
       <button
         key={btn.id}
         onClick={handleButtonClick}
-        className={`rounded-lg font-medium transition-colors ${style} ${sizeClass}`}
+        className={`rounded-lg font-medium transition-colors text-center ${style} ${sizeClass}`}
       >
         {btn.label}
       </button>
@@ -484,6 +514,51 @@ function TaskDetail() {
     }
 
     if (type === 'select') {
+      const keyToTable = {
+        'finalidade': 'finalidade',
+        'descricao_finalidade': 'descricao_finalidade',
+        'detalhe_finalidade': 'detalhe_finalidade',
+        'objetivo_operacao': 'objetivo_operacao',
+        'cobertura_cambial': 'cobertura_cambial',
+        'despesas': 'despesas',
+        'moeda': 'moeda',
+        'pais_destino': 'pais_destino',
+        'intrumento_pagamento': 'instrumento_pagamento',
+        'residencia_cambial': 'residencia_cambial',
+        'cae': 'cae',
+        'entidade_petrolifera': 'entidade_petrolifera',
+        'select_9t5m27': 'banco_beneficiario',
+      }
+
+      const dbOptions = keyToTable[key] ? fieldOptions[keyToTable[key]] : null
+      const selectOptions = (key === 'nif' && nifOptions.length > 0)
+        ? nifOptions
+        : (dbOptions && dbOptions.length > 0)
+          ? dbOptions
+          : values
+
+      return (
+        <div key={component.id}>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            {label}
+            {validate?.required && <span className="text-red-500 ml-1">*</span>}
+          </label>
+          <select
+            value={currentValue}
+            onChange={e => handleChange(key, e.target.value)}
+            disabled={isReadOnly}
+            className={isReadOnly ? readOnlyInput : baseInput}
+          >
+            <option value="">Selecionar...</option>
+            {selectOptions?.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+      )
+    }
+
+    if (type === 'select') {
       // Use dynamic options for NIF if available
       const selectOptions = (component.key === 'nif' && nifOptions.length > 0)
         ? nifOptions
@@ -574,13 +649,23 @@ function TaskDetail() {
             : renderField(component)
         ))}
         {buttons.length > 0 && (
-          <div className="flex flex-wrap gap-3 pt-4 border-t">
-            {buttons.map(btn => renderButton(btn))}
+          <div className="flex items-center justify-between pt-4 border-t">
+            <div className="flex gap-3">
+              {buttons.map(btn => renderButton(btn))}
+            </div>
+            {!task?.name?.includes('Análise') && (
+              <button
+                onClick={handleComplete}
+                disabled={submitting}
+                className="px-6 py-2.5 bg-bank-primary text-white rounded-lg font-medium hover:bg-bank-secondary transition-colors disabled:opacity-50 text-sm"
+              >
+                {submitting ? 'A processar...' : 'Criar Processo'}
+              </button>
+            )}
           </div>
         )}
       </div>
-    )
-  }
+    )}
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -619,13 +704,11 @@ function TaskDetail() {
             {renderForm()}
 
             {!task?.name?.includes('Análise') && (
-              <button
-                onClick={handleComplete}
-                disabled={submitting}
-                className="mt-8 w-full bg-bank-primary text-white py-3 rounded-lg font-semibold hover:bg-bank-secondary transition-colors disabled:opacity-50"
-              >
-                {submitting ? 'A processar...' : 'Criar Processo'}
-              </button>
+              <div className="flex items-center justify-between pt-4 border-t mt-4">
+                <div className="flex gap-3">
+                  {/* Left buttons rendered by renderForm */}
+                </div>
+              </div>
             )}
           </div>
         )}
