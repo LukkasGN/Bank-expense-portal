@@ -31,14 +31,13 @@ function StartProcess() {
   async function handleStart(processKey, processName) {
     setStarting(processKey)
     setError('')
-    setSuccess('')
     try {
-      await startProcess(processKey)
-      setSuccess(`Processo "${processName}" iniciado com sucesso!`)
-    } catch (err) {
-      setError('Erro ao iniciar processo')
-    }
-    setStarting(null)
+        await startProcess(processKey)
+        navigate('/tasks')
+      } catch (err) {
+        setError('Erro ao iniciar processo')
+      }
+      setStarting(null)
   }
 
   return (

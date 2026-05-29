@@ -206,10 +206,7 @@ function TaskDetail() {
         }
       })
       await saveTaskVariables(taskId, camundaVars)
-      setError('')
-      // Show success briefly
-      setSaveSuccess(true)
-      setTimeout(() => setSaveSuccess(false), 3000)
+      navigate('/tasks')
     } catch (err) {
       setError('Erro ao gravar dados')
     }
