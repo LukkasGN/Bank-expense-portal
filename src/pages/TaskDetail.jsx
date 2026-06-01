@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
-import { getTaskById, getTaskVariables, completeTask, getTaskFormSchema, searchAccount, saveTaskVariables, cancelProcess, suggestAccounts, getFieldOptions, getUserGroups } from '../services/tasks'
+import { getTaskById, getTaskVariables, completeTask, getPrioritizedOptions, getTaskFormSchema, searchAccount, saveTaskVariables, cancelProcess, suggestAccounts, getFieldOptions, getUserGroups } from '../services/tasks'
 
 function TaskDetail() {
   const { taskId } = useParams()
@@ -57,6 +57,20 @@ function TaskDetail() {
         prefilled[key] = val.value ?? ''
       })
 
+      // Load prioritized options for moeda and pais_destino
+      const [moedaOpts, paisOpts] = await Promise.all([
+        getPrioritizedOptions('moeda').catch(() => []),
+        getPrioritizedOptions('pais_destino').catch(() => [])
+      ])
+      console.log('moedaOpts:', moedaOpts)
+      console.log('paisOpts:', paisOpts)
+
+      setFieldOptions(prev => ({
+        ...prev,
+        moeda: moedaOpts,
+        pais_destino: paisOpts
+      }))
+
       // Auto-fill creation date from task creation time
       if (taskData.created) {
         // Convert to datetime-local format: "YYYY-MM-DDTHH:mm"
@@ -95,22 +109,27 @@ function TaskDetail() {
       setError('Erro ao carregar tarefa')
     }
     // Load select options from database
+    // Load all select options
     const optionTables = [
       'finalidade', 'descricao_finalidade', 'detalhe_finalidade',
       'objetivo_operacao', 'cobertura_cambial', 'despesas',
-      'moeda', 'pais_destino', 'instrumento_pagamento',
-      'residencia_cambial', 'cae', 'entidade_petrolifera',
-      'banco_beneficiario'
+      'instrumento_pagamento', 'residencia_cambial', 'cae',
+      'entidade_petrolifera', 'banco_beneficiario'
     ]
 
-    const optionResults = await Promise.all(
-      optionTables.map(t => getFieldOptions(t).catch(() => []))
-    )
+    const [optionResults, moedaOpts, paisOpts] = await Promise.all([
+      Promise.all(optionTables.map(t => getFieldOptions(t).catch(() => []))),
+      getPrioritizedOptions('moeda').catch(() => []),
+      getPrioritizedOptions('pais_destino').catch(() => [])
+    ])
 
     const options = {}
     optionTables.forEach((table, i) => {
       options[table] = optionResults[i]
     })
+    options['moeda'] = moedaOpts
+    options['pais_destino'] = paisOpts
+
     setFieldOptions(options)
     setLoading(false)
   }
@@ -290,7 +309,7 @@ function TaskDetail() {
     const inlineButtons = ['Pesquisar', 'Inserir Banco', 'Anexar Documento']
     const isInline = inlineButtons.includes(btn.label)
     const sizeClass = isInline
-      ? 'px-3 py-2 text-xs self-end'
+      ? 'px-4 py-2.5 text-sm self-end w-full'
       : 'px-6 py-2.5 text-sm'
 
     const handleButtonClick = () => {
@@ -332,6 +351,25 @@ function TaskDetail() {
     if (type === 'button') return renderButton(component)
 
     if (type === 'textfield' || type === 'number' || type === 'textarea') {
+
+      if (type === 'number') {
+          return (
+            <div key={component.id}>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {label}
+                {validate?.required && <span className="text-red-500 ml-1">*</span>}
+              </label>
+              <input
+                type="number"
+                value={currentValue || ''}
+                onChange={e => handleChange(key, e.target.value)}
+                disabled={isReadOnly}
+                placeholder="0,00"
+                className={`${isReadOnly ? readOnlyInput : baseInput} text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
+              />
+            </div>
+          )
+        }
       // Special autocomplete for conta_suporte
       if (key === 'conta_suporte') {
         return (
@@ -542,13 +580,23 @@ function TaskDetail() {
           </label>
           <select
             value={currentValue}
-            onChange={e => handleChange(key, e.target.value)}
+            onChange={e => {
+              if (e.target.value !== '__separator__') {
+                handleChange(key, e.target.value)
+              }
+            }}
             disabled={isReadOnly}
             className={isReadOnly ? readOnlyInput : baseInput}
           >
             <option value="">Selecionar...</option>
-            {selectOptions?.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            {selectOptions?.map((opt, idx) => (
+              opt.value === '__separator__'
+                ? <option key={idx} disabled value="__separator__">
+                    {opt.label}
+                  </option>
+                : <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
             ))}
           </select>
         </div>
@@ -607,22 +655,26 @@ function TaskDetail() {
     })
 
     return (
-      <div key={group.id} className="border border-gray-200 rounded-xl p-5 space-y-4">
-        <h3 className="font-semibold text-gray-700 border-b pb-2">{group.label}</h3>
-        {Object.entries(rowMap).map(([row, fields]) => {
-          const count = fields.length
-          const gridClass =
-            count === 1 ? 'grid-cols-1' :
-            count === 2 ? 'grid-cols-2' :
-            count === 3 ? 'grid-cols-3' :
-            count === 4 ? 'grid-cols-4' :
-            'grid-cols-5'
-          return (
-            <div key={row} className={`grid gap-4 ${gridClass}`}>
-              {fields.map(field => renderField(field))}
-            </div>
-          )
-        })}
+      <div key={group.id} className="border border-gray-200 rounded-xl overflow-hidden">
+        <div className="bg-yellow-50 border-b border-yellow-200 px-5 py-3">
+          <h3 className="font-semibold text-gray-700">{group.label}</h3>
+        </div>
+        <div className="p-5 space-y-4">
+          {Object.entries(rowMap).map(([row, fields]) => {
+            const count = fields.length
+            const gridClass =
+              count === 1 ? 'grid-cols-1' :
+              count === 2 ? 'grid-cols-2' :
+              count === 3 ? 'grid-cols-3' :
+              count === 4 ? 'grid-cols-4' :
+              'grid-cols-5'
+            return (
+              <div key={row} className={`grid gap-4 ${gridClass}`}>
+                {fields.map(field => renderField(field))}
+              </div>
+            )
+          })}
+        </div>
       </div>
     )
   }

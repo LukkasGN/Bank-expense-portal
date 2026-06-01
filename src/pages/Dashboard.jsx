@@ -40,7 +40,7 @@ function Dashboard() {
         </div>
 
         {/* Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl shadow p-6 border-l-4 border-bank-accent">
             <p className="text-gray-500 text-sm uppercase tracking-wide">
               Tarefas Pendentes
@@ -68,23 +68,8 @@ function Dashboard() {
               Iniciar processo
             </button>
           </div>
-
-          <div className="bg-white rounded-xl shadow p-6 border-l-4 border-gray-300">
-            <p className="text-gray-500 text-sm uppercase tracking-wide">
-              Sessão
-            </p>
-            <p className="text-xl font-bold text-gray-700 mt-1">{username}</p>
-            <button
-              onClick={() => {
-                localStorage.clear()
-                navigate('/login')
-              }}
-              className="mt-4 text-sm text-red-500 hover:underline font-medium"
-            >
-              Terminar sessão
-            </button>
-          </div>
         </div>
+
 
       </div>
     </div>

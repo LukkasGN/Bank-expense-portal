@@ -120,6 +120,14 @@ export async function getTaskFormSchema(taskId) {
   }
 }
 
+export async function getPrioritizedOptions(tableName) {
+  const response = await axios.get(
+    `http://localhost:8080/api/accounts/options-prioritized/${tableName}`,
+    { auth: getAuth() }
+  )
+  return response.data
+}
+
 export async function suggestAccounts(query) {
   const response = await axios.get(
     `http://localhost:8080/api/accounts/suggest`,
