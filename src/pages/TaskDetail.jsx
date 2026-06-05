@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
+import Documentos from '../components/Documentos/Documentos'
 import { getTaskById, getTaskVariables, completeTask, getPrioritizedOptions, getTaskFormSchema, searchAccount, saveTaskVariables, cancelProcess, suggestAccounts, getFieldOptions, getUserGroups } from '../services/tasks'
 
 function TaskDetail() {
@@ -690,13 +691,30 @@ function TaskDetail() {
       c.type === 'button' && c.label !== 'Criar Processo'
     )
 
+    console.log('full task object:', JSON.stringify(task, null, 2))
+
     return (
       <div className="space-y-6">
+
         {fields.map(component => (
           component.type === 'dynamiclist'
             ? renderDynamicList(component)
             : renderField(component)
         ))}
+
+        {task?.name === 'Inicio Invisíveis Correntes' && (
+          <Documentos
+            processInstanceId={task?.processInstanceId}
+            processKey="processo_operacao_cambial_invisiveis_correntes"
+            author={username}
+            readOnly={task?.name?.includes('Análise')}
+          />
+        )}
+
+        {fields
+          .filter(component => component.key === 'comentario')
+          .map(component => renderField(component))}
+
         {buttons.length > 0 && (
           <div className="flex items-center justify-between pt-4 border-t">
             <div className="flex gap-3">
@@ -715,6 +733,8 @@ function TaskDetail() {
         )}
       </div>
     )}
+
+    console.log('processKey:', task?.processDefinitionKey)
 
   return (
     <div className="min-h-screen bg-gray-100">
