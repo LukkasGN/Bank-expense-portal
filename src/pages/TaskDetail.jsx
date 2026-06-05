@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import Documentos from '../components/Documentos/Documentos'
+import Comentario from '../components/Comentario/Comentario'
 import { getTaskById, getTaskVariables, completeTask, getPrioritizedOptions, getTaskFormSchema, searchAccount, saveTaskVariables, cancelProcess, suggestAccounts, getFieldOptions, getUserGroups } from '../services/tasks'
 
 function TaskDetail() {
@@ -41,14 +42,6 @@ function TaskDetail() {
         const groups = await getUserGroups(username)
         setUserGroups(groups.map(g => g.id))
         console.log('groups loaded:', groups)
-      } catch (err) {
-        console.error('Failed to load groups:', err)
-      }
-
-      try {
-        const groups = await getUserGroups(username)
-        console.log('raw groups response:', groups)
-        setUserGroups(groups.map(g => g.id))
       } catch (err) {
         console.error('Failed to load groups:', err)
       }
@@ -685,35 +678,36 @@ function TaskDetail() {
 
     const components = schema.components || []
     const isAnaliseTask = task?.name?.includes('Análise')
+    const isAnalista = userGroups.includes('analistas')
 
     const fields = components.filter(c => c.type !== 'button')
     const buttons = components.filter(c =>
       c.type === 'button' && c.label !== 'Criar Processo'
     )
 
-    console.log('full task object:', JSON.stringify(task, null, 2))
+    console.log('task name:', task?.name)
 
     return (
       <div className="space-y-6">
-
         {fields.map(component => (
           component.type === 'dynamiclist'
             ? renderDynamicList(component)
             : renderField(component)
         ))}
 
-        {task?.name === 'Inicio Invisíveis Correntes' && (
+        {(task?.name === 'Inicio Invisíveis Correntes' || task?.name === 'Análise I.C.') && (
           <Documentos
             processInstanceId={task?.processInstanceId}
             processKey="processo_operacao_cambial_invisiveis_correntes"
             author={username}
-            readOnly={task?.name?.includes('Análise')}
+            readOnly={isAnalista}
           />
         )}
 
-        {fields
-          .filter(component => component.key === 'comentario')
-          .map(component => renderField(component))}
+        <Comentario
+          value={formData['comentario'] || ''}
+          onChange={val => handleChange('comentario', val)}
+        />
 
         {buttons.length > 0 && (
           <div className="flex items-center justify-between pt-4 border-t">
